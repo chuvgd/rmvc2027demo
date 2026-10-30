@@ -4,71 +4,46 @@
  *   01     idle
  *   02     0x73   手柄工作模式
  *   03     0x5A   Bit0  Bit1  Bit2  Bit3  Bit4  Bit5  Bit6  Bit7
- *   04     data   SLCT  JOYR  JOYL  STRT   UP   RGIHT  DOWN   L
- *   05     data   L2     R2     L1    R1   Y     B     A      X
+ *   04     data   SLCT  JOYR  JOYL  STRT   UP  RGIHT  DOWN  LEFT
+ *   05     data    L2    R2    L1    R1    Y     B     A     X
  *   06     data   右边摇杆  0x00 = 左    0xff = 右
  *   07     data   右边摇杆  0x00 = 上    0xff = 下
  *   08     data   左边摇杆  0x00 = 左    0xff = 右
  *   09     data   左边摇杆  0x00 = 上    0xff = 下
- *
- * PB12 -> DATA
- * PB13 -> CMD
- * PB14 -> CS
- * PB15 -> CLK
+ */
+
+/**
+ * PB5 -> DATA
+ * PB6 -> CMD
+ * PB7 -> CS
+ * PB8 -> CLK
  */
 
 #include "ps2.h"
-#include "sys.h"
+#include "dwt.h"
+#include "gpio.h"
 
 // --------------------------------DEFINE-------------------------------- 参数定义
+// delay
+#define DELAY_US(us) dwt_delay_us(us)
 // PS2手柄的输入输出口
-#define DI() PBin(12) // 数据输入引脚
+#define DI() (uint8_t)HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) // 数据输入引脚
 
-#define CMD_H() PBout(13) = 1 // 命令位高
-#define CMD_L() PBout(13) = 0 // 命令位低
+#define CMD_H() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET)   // 命令位高
+#define CMD_L() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET) // 命令位低
 
-#define CS_H() PBout(14) = 1 // CS拉高(别名ATT)
-#define CS_L() PBout(14) = 0 // CS拉低(别名ATT)
+#define CS_H() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET)   // CS拉高(别名ATT)
+#define CS_L() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET) // CS拉低 (别名ATT)
 
-#define CLK_H() PBout(15) = 1 // 时钟拉高
-#define CLK_L() PBout(15) = 0 // 时钟拉低
+#define CLK_H() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET)   // 时钟高
+#define CLK_L() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET) // 时钟低
 
 // --------------------------------VAULE-------------------------------- 变量定义
-const uint8_t  ps2_cmd[9] = {0x01, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // 请求获取数据命令
-static uint8_t ps2_receive[9];                                                      // 接收数据的缓存
 
 // --------------------------------FUNCTION-------------------------------- 函数定义
 // ----------------INIT---------------- PS2初始化
 void ps2_init(void) {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    // GPIO配置
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
-
-    // DATA 信号从手柄到主机   输入口
-    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_12;
-    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    // COMMMAND 信号从主机到手柄  输出
-    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_13;
-    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    // CS 手柄出发信号 信号在通信期间处于低电平
-    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_14;
-    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    // CLK 信号从主机到手柄   输出口
-    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_15;
-    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
+    dwt_init();
     // 关闭PS2手柄使能
     CS_H();
 }
@@ -95,13 +70,13 @@ uint8_t ps2_comm(uint8_t sendData) {
             CMD_L();
 
         CLK_L();
-        delay_us(16);
+        DELAY_US(16);
 
         // 读取一位数据
         if (DI())
             res |= ref;
         CLK_H();
-        delay_us(16);
+        DELAY_US(16);
     }
 
     // 返回读出数据
@@ -110,18 +85,40 @@ uint8_t ps2_comm(uint8_t sendData) {
 
 // PS2获取按键及摇杆数值
 void ps2_read(ps2_data* ps2Data) {
-    uint8_t i;
+    const uint8_t ps2_cmd[9] = {0x01, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // 请求获取数据命令
+    uint8_t       ps2_receive[9];                                                      // 接收数据的缓存
 
-    // 使能手柄
-    CS_L();
+    CS_L(); // 使能手柄
 
-    // 读取PS2数据
-    for (i = 0; i < 9; i++) {
+    for (uint8_t i = 0; i < 9; i++) { // 读取PS2数据
         ps2_receive[i] = ps2_comm(ps2_cmd[i]);
     }
 
-    // 关闭使能
-    CS_H();
+    CS_H(); // 关闭使能
+
+    /* 手柄没插好时 MISO 一直被上拉成 0xff，照常解析的话摇杆就是满量程，
+     * 底盘会直接冲出去。读到全 0xff 就当作「中位、无按键」返回。 */
+    {
+        uint8_t all_ff = 1;
+        uint8_t i;
+
+        for (i = 1; i < 9; i++) {
+            if (ps2_receive[i] != 0xFF) {
+                all_ff = 0;
+                break;
+            }
+        }
+        if (all_ff) {
+            ps2Data->mode    = 0;
+            ps2Data->btn1    = 0;
+            ps2Data->btn2    = 0;
+            ps2Data->RJoy_LR = 0x80;
+            ps2Data->RJoy_UD = 0x80;
+            ps2Data->LJoy_LR = 0x80;
+            ps2Data->LJoy_UD = 0x80;
+            return;
+        }
+    }
 
     // 数值传递
     ps2Data->mode    = ps2_receive[1];

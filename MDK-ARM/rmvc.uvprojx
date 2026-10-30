@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F103xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;..\Device;..\Application</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../Device;../Application</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -399,9 +399,14 @@
               <FilePath>..\Device\motor.c</FilePath>
             </File>
             <File>
-              <FileName>serve.c</FileName>
+              <FileName>ps2.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Device\serve.c</FilePath>
+              <FilePath>..\Device\ps2.c</FilePath>
+            </File>
+            <File>
+              <FileName>dwt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Device\dwt.c</FilePath>
             </File>
           </Files>
         </Group>
